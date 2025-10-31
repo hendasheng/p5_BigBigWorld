@@ -149,8 +149,8 @@ function draw() {
 function initChars(txt) {
   chars = [];
   let lines = txt.split("\n");
-  let textHeight = lines.length * lineHeight;
-  let baseY = height / 2 - textHeight / 2;
+  // 垂直居中应以行中心为基准，而不是整段高度
+  let baseY = height / 2 - (lines.length - 1) * lineHeight / 2;
 
   let lineMetrics = computeLineMetrics(txt);
 
@@ -204,8 +204,8 @@ function createNewTarget() {
     Object.keys(srcLineLengths).length,
     nextMetrics.length
   );
-
-  let targetYBase = height / 2 - totalLines * lineHeight / 2;
+  // 目标布局垂直居中同样以行中心为基准
+  let targetYBase = height / 2 - (totalLines - 1) * lineHeight / 2;
   let spaceW = textWidth(' ');
 
   // 2. 补齐目标行到最长长度
@@ -344,7 +344,7 @@ function setupTweakpane() {
   let controlFolder = pane.addFolder({ title: 'Control', expanded: true });
 
   let textFolder = controlFolder.addFolder({ title: 'Text', expanded: true });
-  textFolder.addInput(params, 'fontSize', { min: 12, max: 120, step: 1 })
+  textFolder.addInput(params, 'fontSize', { label: 'Font Size', min: 12, max: 120, step: 1 })
     .on('change', (ev) => {
       tSize = ev.value;
       lineHeight = tSize * 1.4;
@@ -353,11 +353,11 @@ function setupTweakpane() {
     });
 
   let animFolder = controlFolder.addFolder({ title: 'Animation', expanded: true });
-  animFolder.addInput(params, 'totalDuration', { min: 500, max: 10000, step: 100 })
+  animFolder.addInput(params, 'totalDuration', { label: 'Duration', min: 500, max: 10000, step: 100 })
     .on('change', (ev) => totalDuration = ev.value);
-  animFolder.addInput(params, 'minScale', { min: 0.1, max: 1.0, step: 0.1 });
+  animFolder.addInput(params, 'minScale', { label: 'Min Scale', min: 0.1, max: 2.0, step: 0.1 });
 
   let effectFolder = controlFolder.addFolder({ title: 'Effects', expanded: true });
-  effectFolder.addInput(params, 'enableGlitch');
-  effectFolder.addInput(params, 'enableColor');
+  effectFolder.addInput(params, 'enableGlitch', { label: 'Glitch' });
+  effectFolder.addInput(params, 'enableColor', { label: 'Color' });
 }
