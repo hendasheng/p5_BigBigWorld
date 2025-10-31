@@ -6,3 +6,7 @@ html, body {
 canvas {
   display: block;
 }
+
+.tp-dfwv {
+  min-width: 300px;
+}

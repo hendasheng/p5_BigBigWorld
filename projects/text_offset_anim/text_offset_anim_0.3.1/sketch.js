@@ -1,4 +1,4 @@
-let str = "微分音音乐（Microtonal music），或简称为微音音乐，微分音即比半音还要小的音程。微分音音乐亦曾在某些原始社会中出现过，古往以来也不乏作曲家和理论家对微分音的研究。";
+let str = "Pallas's leaf warbler (Phylloscopus proregulus) or Pallas's warbler, is a bird that breeds in mountain forests from southern Siberia east to northern Mongolia and northeast China. It is named after the German zoologist Peter Simon Pallas, who first formally described it. This leaf warbler is strongly migratory, wintering mainly in south China and adjacent areas of southeast Asia, although in recent decades increasing numbers have been found in Europe in autumn.";
 
 let chars = [];
 let animating = false;
@@ -26,6 +26,7 @@ let params = {
 };
 let pendingText = null;
 
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 1);
@@ -35,18 +36,31 @@ function setup() {
 
   fill(0);
 
+
+
   params.text = formatText(str);
   initChars(params.text);
   createNewTarget();
 
   pane = new Tweakpane.Pane();
+
+  // pane.registerPlugin(TweakpaneTextareaPlugin);
+
+
   let controlFolder = pane.addFolder({ title: 'Control', expanded: true });
 
   let textFolder = controlFolder.addFolder({ title: 'Text', expanded: true });
-  textFolder.addInput(params, 'text', { multiline: true, lineCount: 5, height: 200 })
+
+  // 保存返回的 controller
+  let textController = textFolder.addInput(params, 'text', { multiline: true })
     .on('change', (ev) => {
       pendingText = formatText(ev.value);
     });
+
+  // 给这一项加上唯一 class（只影响这一个控件）
+  textController.element.classList.add('my-text-input-item');
+
+  // 其他控件（fontSize）照常添加，不会受到上面类的影响
   textFolder.addInput(params, 'fontSize', { min: 12, max: 120, step: 1 })
     .on('change', (ev) => {
       tSize = ev.value;
