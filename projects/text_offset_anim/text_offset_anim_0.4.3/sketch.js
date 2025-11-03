@@ -40,6 +40,11 @@ let params = {
   minScale: 0.5,
   enableGlitch: true,
   enableColor: false,
+  // Animation controls
+  staggerExtraRatio: 0.5,      // 逐字错位比例（原来固定 0.2）
+  offsetJitter: 0.0,           // 逐字随机抖动（0~1，按 step 比例）
+  emptyCharSpeedMultiplier: 2.0, // 空字符（空格→真实字）在揭示前的速度倍增
+  revealThreshold: 0.6,        // 字符从空格切换为真实字的阈值
 };
 
 let currentLanguage = 'cn';
@@ -204,35 +209,57 @@ function draw() {
     let elapsed = millis() - startTime;
     let allDone = true;
     let n = chars.length;
-    let charOffsetStep = totalDuration / (n + n * 0.2);
+    let staggerRatio = params.staggerExtraRatio;
+    let charOffsetStep = totalDuration / (n + n * staggerRatio);
     let charDuration = totalDuration - (n - 1) * charOffsetStep;
 
-    const isDownward = verticalAtTop; // 当前从上到下则倒序启动
+    const isDownward = verticalAtTop; // true: 上→下, false: 下→上
     for (let i = 0; i < n; i++) {
-      const idx = isDownward ? (n - 1 - i) : i;
-      let c = chars[idx];
-      let charOffset = i * charOffsetStep;
+      // 移动顺序：下行使用倒序、上行使用正序
+      const moveIdx = isDownward ? (n - 1 - i) : i;
+      // 揭示顺序索引（始终按阅读顺序，从第一个字开始）
+      const readingIdxReveal = i;
+      // 颜色相位索引（保持视觉节奏不变，可仍用 i）
+      const readingIdxColor = i;
+      let c = chars[moveIdx];
+      let jitterRatio = c.offsetJitterRatio || 0;
+      let moveOffset = i * charOffsetStep + jitterRatio * charOffsetStep;
+      let revealOffset = readingIdxReveal * charOffsetStep + jitterRatio * charOffsetStep;
 
-      if (elapsed > charOffset) {
-        let t = (elapsed - charOffset) / charDuration;
-        t = constrain(t, 0, 1);
-        let scaleT = sin(t * PI);
+      if (elapsed > moveOffset) {
+        let tRawMove = (elapsed - moveOffset) / charDuration;
+        tRawMove = constrain(tRawMove, 0, 1);
+        let scaleT = sin(tRawMove * PI);
         c.currentScale = 1 - scaleT * (1 - params.minScale);
-        t = easeInOutQuad(t);
+        // 位置插值的 t，考虑空字符揭示前加速
+        let posT = tRawMove;
+        const isEmptyToReal = (c.originalChar === ' ' && c.targetChar && c.targetChar !== ' ');
+        if (isEmptyToReal) {
+          const T = params.revealThreshold;
+          const mul = params.emptyCharSpeedMultiplier;
+          if (posT < T) {
+            posT = posT * mul; // 揭示前加速
+          } else {
+            // 揭示后恢复正常速度（可能提前结束，故做上限裁剪）
+            posT = Math.min(1, T * mul + (posT - T));
+          }
+        }
+        posT = easeInOutQuad(posT);
 
-        c.x = lerp(c.startX, c.targetX, t);
-        c.y = lerp(c.startY, c.targetY, t);
+        c.x = lerp(c.startX, c.targetX, posT);
+        c.y = lerp(c.startY, c.targetY, posT);
 
-        if (t < 1) {
+        if (tRawMove < 1) {
           allDone = false;
           if (params.enableGlitch && random() < 0.5) {
             c.char = random(glitchArray);
           } else {
-            c.char = t > 0.6 && c.targetChar ? c.targetChar : c.originalChar;
+            let tRawReveal = (elapsed - revealOffset) / charDuration;
+            c.char = tRawReveal > params.revealThreshold && c.targetChar ? c.targetChar : c.originalChar;
           }
           if (params.enableColor) {
-            if (t < 0.2 || t > 0.8) { c.hue = 0; c.sat = 0; c.bri = 0.8; }
-            else { c.hue = (sin((t + idx * 0.02) * TWO_PI) * 0.5 + 0.5); c.sat = 0.6; c.bri = 1; }
+            if (tRawMove < 0.2 || tRawMove > 0.8) { c.hue = 0; c.sat = 0; c.bri = 0.8; }
+            else { c.hue = (sin((posT + readingIdxColor * 0.02) * TWO_PI) * 0.5 + 0.5); c.sat = 0.6; c.bri = 1; }
           } else { c.hue = 0; c.sat = 0; c.bri = 0.8; }
         } else {
           c.char = c.targetChar || c.originalChar;
@@ -349,6 +376,8 @@ function createNewTarget() {
         c.targetX = xCursor;
         c.targetY = yPos;
         c.targetChar = line[j];
+        // 为每个字符生成一次随机时间抖动比率（相对于 step），避免整行同步
+        c.offsetJitterRatio = (random() - 0.5) * params.offsetJitter;
       }
       xCursor += textWidth(line[j]);
       charIndex++;
@@ -366,6 +395,7 @@ function createNewTarget() {
       c.targetX = c.x;       // 保持水平位置，不向右偏移
       c.targetY = offscreenY; // 垂直离场
       c.targetChar = ' ';     // 结束后变为空格，避免残留
+      c.offsetJitterRatio = (random() - 0.5) * params.offsetJitter;
     }
   }
 
@@ -428,6 +458,10 @@ function setupTweakpane() {
   animFolder.addInput(params, 'totalDuration', { label: 'Duration', min: 500, max: 10000, step: 100 })
     .on('change', (ev) => totalDuration = ev.value);
   animFolder.addInput(params, 'minScale', { label: 'Min Scale', min: 0.1, max: 2.0, step: 0.1 });
+  animFolder.addInput(params, 'staggerExtraRatio', { label: 'Stagger Ratio', min: 0.0, max: 1.0, step: 0.01 });
+  animFolder.addInput(params, 'offsetJitter', { label: 'Offset Jitter', min: 0.0, max: 1.0, step: 0.01 });
+  animFolder.addInput(params, 'emptyCharSpeedMultiplier', { label: 'Empty Speed', min: 1.0, max: 4.0, step: 0.1 });
+  animFolder.addInput(params, 'revealThreshold', { label: 'Reveal Threshold', min: 0.3, max: 0.9, step: 0.01 });
 
   let effectFolder = controlFolder.addFolder({ title: 'Effects', expanded: true });
   effectFolder.addInput(params, 'enableGlitch', { label: 'Glitch' },);
