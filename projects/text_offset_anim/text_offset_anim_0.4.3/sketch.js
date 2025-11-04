@@ -217,8 +217,8 @@ function draw() {
     for (let i = 0; i < n; i++) {
       // 移动顺序：下行使用倒序、上行使用正序
       const moveIdx = isDownward ? (n - 1 - i) : i;
-      // 揭示顺序索引（始终按阅读顺序，从第一个字开始）
-      const readingIdxReveal = i;
+      // 揭示顺序索引（按字符的阅读索引，确保从第一个字开始恢复）
+      const readingIdxReveal = moveIdx;
       // 颜色相位索引（保持视觉节奏不变，可仍用 i）
       const readingIdxColor = i;
       let c = chars[moveIdx];
