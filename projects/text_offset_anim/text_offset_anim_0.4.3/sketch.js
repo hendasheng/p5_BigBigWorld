@@ -35,16 +35,18 @@ let glitchArray = glitchChars.split('');
 
 let pane;
 let params = {
-  totalDuration: 3000,
+  totalDuration: 5000,
   fontSize: tSize,
   minScale: 0.5,
   enableGlitch: true,
+  glitchMaxProb: 0.5,         // glitch 最大概率（配合缓入缓出曲线）
   enableColor: false,
   // Animation controls
-  staggerExtraRatio: 0.5,      // 逐字错位比例（原来固定 0.2）
-  offsetJitter: 0.0,           // 逐字随机抖动（0~1，按 step 比例）
-  emptyCharSpeedMultiplier: 2.0, // 空字符（空格→真实字）在揭示前的速度倍增
-  revealThreshold: 0.6,        // 字符从空格切换为真实字的阈值
+  staggerExtraRatio: 0.2,       // 参考 0.2：逐字错位比例默认 0.2
+  offsetJitter: 0.0,            // 参考 0.2：默认无抖动，可按需开启
+  emptyCharSpeedMultiplier: 1.0, // 空字符（空格→真实字）在揭示前的速度倍增
+  revealThreshold: 1,        // 字符从空格切换为真实字的阈值
+  enableGlobalEase: false,      // 参考 0.2：默认关闭整段缓入缓出，仅逐字缓动
 };
 
 let currentLanguage = 'cn';
@@ -207,6 +209,10 @@ function draw() {
 
   if (animating) {
     let elapsed = millis() - startTime;
+    // 可选全局缓入缓出：参考 0.2 默认关闭，仅逐字缓动
+    let globalPhaseRaw = constrain(elapsed / totalDuration, 0, 1);
+    let elapsedGlobal = easeInOutQuad(globalPhaseRaw) * totalDuration;
+    let elapsedDrive = params.enableGlobalEase ? elapsedGlobal : elapsed;
     let allDone = true;
     let n = chars.length;
     let staggerRatio = params.staggerExtraRatio;
@@ -226,8 +232,8 @@ function draw() {
       let moveOffset = i * charOffsetStep + jitterRatio * charOffsetStep;
       let revealOffset = readingIdxReveal * charOffsetStep + jitterRatio * charOffsetStep;
 
-      if (elapsed > moveOffset) {
-        let tRawMove = (elapsed - moveOffset) / charDuration;
+      if (elapsedDrive > moveOffset) {
+        let tRawMove = (elapsedDrive - moveOffset) / charDuration;
         tRawMove = constrain(tRawMove, 0, 1);
         let scaleT = sin(tRawMove * PI);
         c.currentScale = 1 - scaleT * (1 - params.minScale);
@@ -251,10 +257,12 @@ function draw() {
 
         if (tRawMove < 1) {
           allDone = false;
-          if (params.enableGlitch && random() < 0.5) {
+          // glitch 概率随进度缓入缓出：使用 scaleT (0→1→0)
+          const glitchProb = params.glitchMaxProb * scaleT;
+          if (params.enableGlitch && random() < glitchProb) {
             c.char = random(glitchArray);
           } else {
-            let tRawReveal = (elapsed - revealOffset) / charDuration;
+            let tRawReveal = (elapsedDrive - revealOffset) / charDuration;
             c.char = tRawReveal > params.revealThreshold && c.targetChar ? c.targetChar : c.originalChar;
           }
           if (params.enableColor) {
@@ -462,9 +470,11 @@ function setupTweakpane() {
   animFolder.addInput(params, 'offsetJitter', { label: 'Offset Jitter', min: 0.0, max: 1.0, step: 0.01 });
   animFolder.addInput(params, 'emptyCharSpeedMultiplier', { label: 'Empty Speed', min: 1.0, max: 4.0, step: 0.1 });
   animFolder.addInput(params, 'revealThreshold', { label: 'Reveal Threshold', min: 0.3, max: 0.9, step: 0.01 });
+  animFolder.addInput(params, 'enableGlobalEase', { label: 'Global Ease' });
 
   let effectFolder = controlFolder.addFolder({ title: 'Effects', expanded: true });
   effectFolder.addInput(params, 'enableGlitch', { label: 'Glitch' },);
+  effectFolder.addInput(params, 'glitchMaxProb', { label: 'Glitch Strength', min: 0.0, max: 1.0, step: 0.01 });
   effectFolder.addInput(params, 'enableColor', { label: 'Color' });
 }
 
