@@ -1,10 +1,17 @@
 // p5.js — ASCII horse run with distance-linked fill (stable, low flicker)
 
-let fpsRun = 10;
+let fpsRun = 8; // updated from params.bpm each frame (one full run cycle per beat)
 let fontPx = 18;
 let fontReady = false;
 let pane = null;
+let paneVisible = false;
+let paneHover = false;
+let showHelp = false;
+let cCycling = false;
+let lastPaletteCycleMs = 0;
+let paletteBeforeCycle = "v0.5";
 const params = {
+  bpm: 120,
   changes: 1.2,
   space: 0.18,
   palette: "v0.5",
@@ -21,13 +28,21 @@ const colorThemes = {
     fill: [0, 90],
     horse: "#FFFFFF",
   },
+   "v0.6": {
+    bg: "#ffffffff",
+    fill: [0, 40],
+    horse: "#ff1f1fff",
+  },
 };
+const paletteOrder = ["v0.4", "v0.5", "v0.6"];
+const paletteCycleIntervalMs = 95;
 
 const fillScale = 0.82;
 const trailRadius = 12.0;
 const fillRampGroups = [
   "      _",
   "-=~^",
+  ":░▒-+=*▓#",
   "<>[]{}()",
   "!il1",
   "+*#%&@$",
@@ -139,15 +154,23 @@ const rawFrames = [
 function setup() {
   createCanvas(windowWidth, windowHeight);
   pixelDensity(1);
+  noCursor();
   textAlign(LEFT, TOP);
   noStroke();
   if (window.Tweakpane && !pane) {
     pane = new window.Tweakpane.Pane({ title: "ASCII" });
+    pane.addInput(params, "bpm", {
+      label: "bpm",
+      min: 40,
+      max: 240,
+      step: 1,
+    });
     pane.addInput(params, "palette", {
       label: "palette",
       options: {
         "v0.4": "v0.4",
         "v0.5": "v0.5",
+        "v0.6": "v0.6",
       },
     });
     pane.addInput(params, "changes", {
@@ -168,6 +191,21 @@ function setup() {
       max: 1,
       step: 0.01,
     });
+    const pe = pane.element;
+    pe.style.position = "fixed";
+    pe.style.top = "12px";
+    pe.style.right = "12px";
+    pe.style.zIndex = "50";
+    pe.style.transition = "opacity 140ms ease, transform 140ms ease";
+    pe.addEventListener("mouseenter", () => {
+      paneHover = true;
+      setPaneVisible(true);
+    });
+    pe.addEventListener("mouseleave", () => {
+      paneHover = false;
+      setPaneVisible(false);
+    });
+    setPaneVisible(false);
   }
   document.fonts.ready.then(() => {
     textFont("JetBrains Mono, monospace");
@@ -183,6 +221,10 @@ function windowResized() {
 }
 
 function draw() {
+  updatePaneVisibility();
+  updatePaletteCycle();
+  const clampedBpm = constrain(params.bpm, 1, 400);
+  fpsRun = clampedBpm / 15; // 4 frames per beat -> fpsRun = 4 * bpm / 60 = bpm / 15
   const theme = colorThemes[params.palette] ?? colorThemes["v0.5"];
   background(theme.bg);
   if (!fontReady || animFrameCount === 0) return;
@@ -365,6 +407,7 @@ function draw() {
     const row = rows[y] ?? "";
     text(row, x0, y0 + y * lineH);
   }
+  if (showHelp) drawHelpOverlay();
 }
 
 function buildFrames() {
@@ -595,9 +638,74 @@ function sampleMotionAtPos(p) {
   };
 }
 
+function setPaneVisible(visible) {
+  if (!pane) return;
+  if (paneVisible === visible) return;
+  paneVisible = visible;
+  const pe = pane.element;
+  pe.style.opacity = visible ? "1" : "0";
+  pe.style.pointerEvents = visible ? "auto" : "none";
+  pe.style.transform = visible ? "translateY(0px)" : "translateY(-8px)";
+}
+
+function updatePaneVisibility() {
+  if (!pane) return;
+  const hotZoneW = 96;
+  const hotZoneH = 72;
+  const inHotZone =
+    mouseX >= width - hotZoneW &&
+    mouseX <= width &&
+    mouseY >= 0 &&
+    mouseY <= hotZoneH;
+  setPaneVisible(inHotZone || paneHover);
+}
+
+function updatePaletteCycle() {
+  if (!cCycling) return;
+  const now = millis();
+  if (now - lastPaletteCycleMs < paletteCycleIntervalMs) return;
+  lastPaletteCycleMs = now;
+  const cur = paletteOrder.indexOf(params.palette);
+  const next = (cur + 1 + paletteOrder.length) % paletteOrder.length;
+  params.palette = paletteOrder[next];
+}
+
+function drawHelpOverlay() {
+  fill(0, 170);
+  rect(14, 14, 280, 120, 8);
+  fill(255);
+  textSize(12);
+  textFont("JetBrains Mono, monospace");
+  text(
+    "Shortcuts\n" +
+    "4/5/6 : switch palette\n" +
+    "C (hold): fast cycle palette\n" +
+    "F : fullscreen on/off\n" +
+    "H : toggle this help",
+    24,
+    24
+  );
+}
+
 function keyPressed() {
+  if (key === "4") params.palette = "v0.4";
+  if (key === "5") params.palette = "v0.5";
+  if (key === "6") params.palette = "v0.6";
+  if (key === "c" || key === "C") {
+    if (!cCycling) paletteBeforeCycle = params.palette;
+    cCycling = true;
+    lastPaletteCycleMs = 0;
+  }
   if (key === "f" || key === "F") {
     const next = !fullscreen();
     fullscreen(next);
+  }
+  if (key === "h" || key === "H") showHelp = !showHelp;
+}
+
+function keyReleased() {
+  if (key === "c" || key === "C") {
+    cCycling = false;
+    params.palette = paletteBeforeCycle;
   }
 }
