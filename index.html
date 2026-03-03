@@ -45,24 +45,26 @@
     .eyebrow {
       margin: 0 0 10px;
       color: #7f8a96;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.14em;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(38px, 8vw, 76px);
-      line-height: 0.94;
-      letter-spacing: -0.04em;
+      font-size: clamp(34px, 7vw, 64px);
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+      font-weight: 700;
     }
 
     .subtitle {
       margin: 16px 0 0;
-      max-width: 640px;
-      font-size: 18px;
-      line-height: 1.7;
+      max-width: 720px;
+      font-size: 17px;
+      line-height: 1.65;
+      font-weight: 400;
       color: var(--muted);
     }
 
@@ -77,64 +79,71 @@
       flex-direction: column;
       align-items: flex-start;
       min-height: 100%;
-      padding: 24px;
+      padding: 22px;
       border: 1px solid var(--line);
-      border-radius: 24px;
+      border-radius: 20px;
       background: var(--panel);
       box-shadow: var(--shadow);
       backdrop-filter: blur(8px);
     }
 
     .project-name {
-      margin: 0 0 8px;
-      font-size: 28px;
-      line-height: 1.05;
+      margin: 0 0 10px;
+      font-size: 22px;
+      line-height: 1.14;
+      font-weight: 650;
+      letter-spacing: -0.02em;
     }
 
     .version {
       display: inline-block;
-      margin-bottom: 14px;
-      padding: 6px 10px;
+      margin-bottom: 16px;
+      padding: 5px 9px;
       border-radius: 999px;
       background: rgba(63, 122, 214, 0.14);
       color: #8fb4f0;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
 
     .path {
-      margin: 0 0 22px;
+      margin: 0 0 20px;
       flex: 1 1 auto;
       color: var(--muted);
-      font-size: 14px;
-      line-height: 1.6;
-      word-break: break-all;
+      font-size: 15px;
+      line-height: 1.68;
+      word-break: break-word;
     }
 
     .link {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       margin-top: auto;
-      min-width: 116px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(143, 180, 240, 0.22);
-      background: rgba(63, 122, 214, 0.08);
-      color: #c6d9f6;
+      gap: 8px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #8fb4f0;
       text-decoration: none;
-      font-weight: 600;
-      transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      transition: color 160ms ease, transform 160ms ease;
     }
 
     .link:hover,
     .link:focus-visible {
-      background: rgba(63, 122, 214, 0.14);
-      border-color: rgba(143, 180, 240, 0.38);
       color: #e6f0ff;
       transform: translateY(-1px);
+    }
+
+    .link::after {
+      content: "→";
+      font-size: 14px;
+      line-height: 1;
     }
 
     @media (max-width: 720px) {
@@ -143,11 +152,11 @@
       }
 
       .card {
-        padding: 20px;
+        padding: 18px;
       }
 
       .subtitle {
-        font-size: 16px;
+        font-size: 15px;
       }
     }
   </style>
@@ -164,35 +173,35 @@
       <article class="card">
         <h2 class="project-name">ASCII Edge Glitch</h2>
         <span class="version">v0.3</span>
-        <p class="path">projects/ascii_edge_glitch/ascii_edge_glitch_0.3/index.html</p>
+        <p class="path">拖拽本地 mp4，将画面轮廓转成 ASCII 字符、分色和局部 glitch 扰动的视频特效实验。</p>
         <a class="link" href="projects/ascii_edge_glitch/ascii_edge_glitch_0.3/index.html">进入项目</a>
       </article>
 
       <article class="card">
         <h2 class="project-name">Contour Detection OpenCV.js</h2>
         <span class="version">legacy</span>
-        <p class="path">projects/contour_detection_opencvjs/index.html</p>
+        <p class="path">基于 OpenCV.js 的轮廓检测实验，包含阈值分割、contour、bounding box、连线和标签可视化。</p>
         <a class="link" href="projects/contour_detection_opencvjs/index.html">进入项目</a>
       </article>
 
       <article class="card">
         <h2 class="project-name">Horse Running</h2>
         <span class="version">v0.3</span>
-        <p class="path">projects/horse_running/horse_running_0.3/index.html</p>
+        <p class="path">围绕马奔跑动态展开的动画实验项目，用不同版本持续调整动作、节奏和画面表现。</p>
         <a class="link" href="projects/horse_running/horse_running_0.3/index.html">进入项目</a>
       </article>
 
       <article class="card">
         <h2 class="project-name">Text Offset Anim</h2>
         <span class="version">v0.4.3</span>
-        <p class="path">projects/text_offset_anim/text_offset_anim_0.4.3/index.html</p>
+        <p class="path">聚焦文字错位、偏移和动态排版的动画实验，强调字符层位移、层叠与时间节奏。</p>
         <a class="link" href="projects/text_offset_anim/text_offset_anim_0.4.3/index.html">进入项目</a>
       </article>
 
       <article class="card">
         <h2 class="project-name">Yin Mo Lun</h2>
         <span class="version">v0.1</span>
-        <p class="path">projects/yin_mo_lun/yin_mo_lun_0.1/index.html</p>
+        <p class="path">一个独立视觉概念项目，目前版本较早，主要用于承载特定主题下的图形和动画实验。</p>
         <a class="link" href="projects/yin_mo_lun/yin_mo_lun_0.1/index.html">进入项目</a>
       </article>
     </section>
