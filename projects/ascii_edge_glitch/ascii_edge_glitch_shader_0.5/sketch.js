@@ -27,6 +27,20 @@ const metrics = {
   fps: 0,
 };
 
+const runtime = {
+  lastFpsCap: -1,
+  coverKey: "",
+  cover: { dx: 0, dy: 0, dw: 0, dh: 0 },
+  analysisKey: "",
+  activeCells: [],
+  blobRects: [],
+  shaderRectCount: 0,
+  shaderUniforms: new Array(MAX_SHADER_RECTS * 4).fill(0),
+  shaderModes: new Array(MAX_SHADER_RECTS).fill(0),
+  cellW: 1,
+  cellH: 1,
+};
+
 const params = {
   cellSize: 7,
   edgeThreshold: 106,
@@ -69,7 +83,7 @@ function preload() {
 function setup() {
   createCanvas(windowWidth, windowHeight);
   pixelDensity(1);
-  frameRate(params.maxFps);
+  applyFpsCap();
 
   textFont("JetBrains Mono");
   textAlign(CENTER, CENTER);
@@ -89,7 +103,7 @@ function setup() {
 }
 
 function draw() {
-  if (params.maxFps > 0) frameRate(params.maxFps);
+  applyFpsCap();
   metrics.fps = lerp(metrics.fps, frameRate(), 0.18);
 
   background(10, 12, 16);
@@ -105,40 +119,21 @@ function draw() {
   }
 
   const videoNode = videoSource.elt;
-  const cover = computeCoverRect(videoNode.videoWidth, videoNode.videoHeight, width, height);
+  const cover = getCachedCoverRect(videoNode);
   renderSourceFrame(videoNode, cover);
 
   const procW = Math.max(40, Math.floor(width / params.cellSize));
   const procH = Math.max(30, Math.floor(height / params.cellSize));
-  ensureEdgeBuffer(procW, procH);
-  renderEdgeBuffer(videoNode);
-  edgePg.loadPixels();
+  refreshAnalysisIfNeeded(videoNode, procW, procH);
 
-  const luma = buildLuma(edgePg);
-  const cellW = width / edgePg.width;
-  const cellH = height / edgePg.height;
-  const points = [];
+  const activeCells = runtime.activeCells;
+  const blobRects = runtime.blobRects;
+  const cellW = runtime.cellW;
+  const cellH = runtime.cellH;
 
-  for (let y = 1; y < edgePg.height - 1; y++) {
-    for (let x = 1; x < edgePg.width - 1; x++) {
-      const edge = sobelData(luma, edgePg.width, x, y);
-      if (edge.mag < params.edgeThreshold) continue;
-
-      const strength = constrain((edge.mag - params.edgeThreshold) / Math.max(1, 255 - params.edgeThreshold), 0, 1);
-
-      if (((x + y) & 1) === 0) {
-        points.push({
-          x: (x + 0.5) * cellW,
-          y: (y + 0.5) * cellH,
-          strength,
-          color: getFrameColor(edgePg.pixels, edgePg.width, edgePg.height, x, y),
-        });
-      }
-    }
+  if (params.showShaderBase) {
+    renderShaderFrame(runtime.shaderUniforms, runtime.shaderModes, runtime.shaderRectCount);
   }
-
-  const blobRects = params.showBlobFx || params.showBlobOutlines ? selectBlobRects(points) : [];
-  if (params.showShaderBase) renderShaderFrame(blobRects);
 
   if (!params.showVideo) {
     push();
@@ -157,31 +152,30 @@ function draw() {
     blendMode(ADD);
     textSize(Math.max(6, Math.floor(Math.min(cellW, cellH) * 1.15)));
 
-    for (let y = 1; y < edgePg.height - 1; y++) {
-      const rowShift = computeRowShift(y, cellW);
-      for (let x = 1; x < edgePg.width - 1; x++) {
-        const edge = sobelData(luma, edgePg.width, x, y);
-        if (edge.mag < params.edgeThreshold) continue;
+    let lastRow = -1;
+    let rowShift = 0;
+    for (let i = 0; i < activeCells.length; i++) {
+      const cell = activeCells[i];
+      if (cell.y !== lastRow) {
+        lastRow = cell.y;
+        rowShift = computeRowShift(cell.y, cellW);
+      }
 
-        const idx = y * edgePg.width + x;
-        const lumaValue = luma[idx];
-        const ch = pickAsciiChar(edge, lumaValue, x, y);
-        const split = computeSplit(x, y, edge.mag);
-        const cx = (x + 0.5) * cellW + rowShift + random(-params.jitterPx, params.jitterPx);
-        const cy = (y + 0.5) * cellH + random(-params.jitterPx, params.jitterPx);
-        const strength = constrain((edge.mag - params.edgeThreshold) / Math.max(1, 255 - params.edgeThreshold), 0, 1);
+      const ch = pickAsciiChar(cell, cell.luma, cell.x, cell.y);
+      const split = computeSplit(cell.x, cell.y, cell.mag);
+      const cx = (cell.x + 0.5) * cellW + rowShift + random(-params.jitterPx, params.jitterPx);
+      const cy = (cell.y + 0.5) * cellH + random(-params.jitterPx, params.jitterPx);
 
-        if (params.tintEdges) {
-          const c = buildGlitchColor(getFrameColor(edgePg.pixels, edgePg.width, edgePg.height, x, y), strength, x, y);
-          if (split > 0.01) {
-            drawSplitCharacter(ch, cx, cy, c, split, strength);
-          } else {
-            drawGlowCharacter(ch, cx, cy, c, strength);
-          }
+      if (params.tintEdges) {
+        const c = buildGlitchColor(cell.color, cell.strength, cell.x, cell.y);
+        if (split > 0.01) {
+          drawSplitCharacter(ch, cx, cy, c, split, cell.strength);
         } else {
-          fill(240, 245, 255, Math.round(255 * params.opacity));
-          text(ch, cx, cy);
+          drawGlowCharacter(ch, cx, cy, c, cell.strength);
         }
+      } else {
+        fill(240, 245, 255, Math.round(255 * params.opacity));
+        text(ch, cx, cy);
       }
     }
     pop();
@@ -198,10 +192,7 @@ function renderSourceFrame(videoNode, cover) {
   sourcePg.pop();
 }
 
-function renderShaderFrame(blobRects) {
-  const rectUniforms = buildShaderRectUniforms(blobRects);
-  const rectModes = buildShaderRectModes(blobRects);
-  const rectCount = countShaderRects(blobRects);
+function renderShaderFrame(rectUniforms, rectModes, rectCount) {
   const amount = pow(params.shaderAmount, 1.25) * 1.65;
   const rgbShift = pow(params.rgbShift, 1.1) * 1.85;
   const blockMix = pow(params.damageMix, 1.12) * 1.68;
@@ -245,6 +236,89 @@ function buildLuma(buffer) {
   return luma;
 }
 
+function refreshAnalysisIfNeeded(videoNode, procW, procH) {
+  const nextKey = [
+    Math.floor(videoNode.currentTime * 120),
+    procW,
+    procH,
+    params.edgeThreshold,
+    params.blur,
+    params.blobPoints,
+    params.blobScale,
+    params.blobSpacing,
+    params.blobMaxSize,
+    params.showBlobFx ? 1 : 0,
+    params.showBlobOutlines ? 1 : 0,
+    Math.round(params.rawMix * 100),
+    Math.round(params.invertMix * 100),
+    Math.round(params.damageMix * 100),
+  ].join("|");
+
+  if (runtime.analysisKey === nextKey) return;
+  runtime.analysisKey = nextKey;
+
+  ensureEdgeBuffer(procW, procH);
+  renderEdgeBuffer(videoNode);
+  edgePg.loadPixels();
+
+  const luma = buildLuma(edgePg);
+  const analysis = buildActiveCells(luma, edgePg);
+  runtime.activeCells = analysis.activeCells;
+  runtime.cellW = width / edgePg.width;
+  runtime.cellH = height / edgePg.height;
+  runtime.blobRects =
+    params.showBlobFx || params.showBlobOutlines ? selectBlobRects(analysis.points) : [];
+  updateShaderRectData(runtime.blobRects);
+}
+
+function buildActiveCells(luma, buffer) {
+  const activeCells = [];
+  const points = [];
+  const pixels = buffer.pixels;
+  const w = buffer.width;
+  const h = buffer.height;
+  const cellW = width / w;
+  const cellH = height / h;
+
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const edge = sobelData(luma, w, x, y);
+      if (edge.mag < params.edgeThreshold) continue;
+
+      const idx = y * w + x;
+      const pixIdx = idx * 4;
+      const strength = constrain((edge.mag - params.edgeThreshold) / Math.max(1, 255 - params.edgeThreshold), 0, 1);
+      const colorSample = {
+        r: pixels[pixIdx + 0],
+        g: pixels[pixIdx + 1],
+        b: pixels[pixIdx + 2],
+      };
+      const cell = {
+        x,
+        y,
+        gx: edge.gx,
+        gy: edge.gy,
+        mag: edge.mag,
+        luma: luma[idx],
+        strength,
+        color: colorSample,
+      };
+      activeCells.push(cell);
+
+      if (((x + y) & 1) === 0) {
+        points.push({
+          x: (x + 0.5) * cellW,
+          y: (y + 0.5) * cellH,
+          strength,
+          color: colorSample,
+        });
+      }
+    }
+  }
+
+  return { activeCells, points };
+}
+
 function selectBlobRects(points) {
   if (!points.length || params.blobPoints <= 0) return [];
 
@@ -286,39 +360,29 @@ function isBlobFarEnough(point, selected, minDistSq) {
   return true;
 }
 
-function buildShaderRectUniforms(blobRects) {
-  const shaderRects = blobRects.filter((rect) => rect.shaderEnabled);
-  const uniforms = [];
-  const count = Math.min(shaderRects.length, MAX_SHADER_RECTS);
-  for (let i = 0; i < count; i++) {
-    const rect = shaderRects[i];
-    uniforms.push(
-      rect.x / Math.max(1, width),
-      rect.y / Math.max(1, height),
-      rect.w * 0.5 / Math.max(1, width),
-      rect.h * 0.5 / Math.max(1, height)
-    );
-  }
-  while (uniforms.length < MAX_SHADER_RECTS * 4) uniforms.push(0);
-  return uniforms;
-}
+function updateShaderRectData(blobRects) {
+  const uniforms = runtime.shaderUniforms;
+  const modes = runtime.shaderModes;
+  const invW = 1 / Math.max(1, width);
+  const invH = 1 / Math.max(1, height);
+  let count = 0;
 
-function buildShaderRectModes(blobRects) {
-  const shaderRects = blobRects.filter((rect) => rect.shaderEnabled);
-  const modes = [];
-  const count = Math.min(shaderRects.length, MAX_SHADER_RECTS);
-  for (let i = 0; i < count; i++) {
-    modes.push(shaderRects[i].mode || 0);
-  }
-  while (modes.length < MAX_SHADER_RECTS) modes.push(0);
-  return modes;
-}
+  for (let i = 0; i < blobRects.length && count < MAX_SHADER_RECTS; i++) {
+    const rect = blobRects[i];
+    if (!rect.shaderEnabled) continue;
 
-function countShaderRects(blobRects) {
-  return Math.min(
-    blobRects.reduce((sum, rect) => sum + (rect.shaderEnabled ? 1 : 0), 0),
-    MAX_SHADER_RECTS
-  );
+    const base = count * 4;
+    uniforms[base + 0] = rect.x * invW;
+    uniforms[base + 1] = rect.y * invH;
+    uniforms[base + 2] = rect.w * 0.5 * invW;
+    uniforms[base + 3] = rect.h * 0.5 * invH;
+    modes[count] = rect.mode || 0;
+    count++;
+  }
+
+  for (let i = count * 4; i < MAX_SHADER_RECTS * 4; i++) uniforms[i] = 0;
+  for (let i = count; i < MAX_SHADER_RECTS; i++) modes[i] = 0;
+  runtime.shaderRectCount = count;
 }
 
 function assignBlobMode(point, index) {
@@ -512,6 +576,11 @@ function loadVideoFile(file) {
   setStatus(false, "加载视频...");
   haveSource = true;
   videoReady = false;
+  runtime.analysisKey = "";
+  runtime.coverKey = "";
+  runtime.activeCells = [];
+  runtime.blobRects = [];
+  runtime.shaderRectCount = 0;
 
   if (videoSource) {
     try {
@@ -632,15 +701,31 @@ function getFrameColor(pixels, frameWidth, frameHeight, x, y) {
 function buildGlitchColor(sourceColor, edgeStrength, x, y) {
   const bias = noise(x * 0.11 + 10, y * 0.11 + 20, frameCount * 0.02);
   const accentMix = constrain(0.22 + edgeStrength * 0.48 + bias * 0.18, 0, 0.98);
-  const baseRed = lerp(36, red(sourceColor), 0.28);
-  const baseGreen = lerp(110, green(sourceColor), 0.42);
-  const baseBlue = lerp(180, blue(sourceColor), 0.46);
+  const channels = readColorChannels(sourceColor);
+  const baseRed = lerp(36, channels.r, 0.28);
+  const baseGreen = lerp(110, channels.g, 0.42);
+  const baseBlue = lerp(180, channels.b, 0.46);
 
   return color(
     constrain(lerp(baseRed, 255, accentMix * 0.82), 48, 255),
     constrain(lerp(baseGreen, 230, accentMix * 0.62), 90, 255),
     constrain(lerp(baseBlue, 255, accentMix), 120, 255)
   );
+}
+
+function readColorChannels(sourceColor) {
+  if (sourceColor && Array.isArray(sourceColor.levels)) {
+    return {
+      r: sourceColor.levels[0],
+      g: sourceColor.levels[1],
+      b: sourceColor.levels[2],
+    };
+  }
+  return {
+    r: sourceColor?.r || 0,
+    g: sourceColor?.g || 0,
+    b: sourceColor?.b || 0,
+  };
 }
 
 function drawSplitCharacter(ch, x, y, c, splitOffset, edgeStrength) {
@@ -698,10 +783,27 @@ function computeCoverTo(dstW, dstH, srcW, srcH) {
   return [dx, dy, dw, dh];
 }
 
+function getCachedCoverRect(videoNode) {
+  const nextKey = [videoNode.videoWidth, videoNode.videoHeight, width, height].join("|");
+  if (runtime.coverKey !== nextKey) {
+    runtime.coverKey = nextKey;
+    runtime.cover = computeCoverRect(videoNode.videoWidth, videoNode.videoHeight, width, height);
+  }
+  return runtime.cover;
+}
+
+function applyFpsCap() {
+  if (runtime.lastFpsCap === params.maxFps) return;
+  runtime.lastFpsCap = params.maxFps;
+  if (params.maxFps > 0) frameRate(params.maxFps);
+}
+
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   sourcePg.resizeCanvas(width, height);
   shaderPg.resizeCanvas(width, height);
+  runtime.coverKey = "";
+  runtime.analysisKey = "";
 }
 
 function mousePressed() {
