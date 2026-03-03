@@ -12,8 +12,8 @@
 ### ASCII Edge Glitch
 
 - 目录：`projects/ascii_edge_glitch`
-- 当前首页入口：`projects/ascii_edge_glitch/ascii_edge_glitch_0.3/index.html`
-- 这是一个基于视频边缘提取的 ASCII glitch 实验。通过拖拽本地 mp4，将画面轮廓转成字符、分色和局部块状扰动，偏向风格化视频特效。
+- 当前首页入口：`projects/ascii_edge_glitch/ascii_edge_glitch_shader_0.5/index.html`
+- 这是一个基于视频边缘提取和 shader 视频处理的 ASCII glitch 实验。当前版本保留 p5.js 的字符与线框叠层，同时把视频本体的色偏、块状错位和扫描干扰交给 shader 完成。
 
 ### Contour Detection OpenCV.js
 
