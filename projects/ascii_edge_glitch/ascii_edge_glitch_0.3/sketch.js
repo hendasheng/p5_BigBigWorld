@@ -49,7 +49,7 @@ const params = {
   blobAlpha: 0.78,
   maxFps: 30,
   showVideo: true,
-  tintEdges: true,
+  tintEdges: false,
 };
 
 const ASCII_DENSE =
