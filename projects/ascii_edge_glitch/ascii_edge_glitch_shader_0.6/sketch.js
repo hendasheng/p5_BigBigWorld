@@ -58,6 +58,8 @@ const params = {
   blobScale: 1.0,
   blobSpacing: 1.1,
   blobMaxSize: 1.8,
+  blobTrailDensity: 0.78,
+  blobTrailScatter: 1.0,
   showBlobOutlines: true,
   maxFps: 30,
   showVideo: true,
@@ -193,6 +195,8 @@ function renderShaderFrame(rectUniforms, rectModes, rectCount) {
   const blockMix = pow(params.damageMix, 1.12) * 1.68;
   const scanMix = (0.24 + pow(params.damageMix, 0.95) * 0.9) * (0.72 + params.shaderAmount * 0.38);
   const noiseMix = (0.18 + pow(params.damageMix, 1.04) * 1.05) * (0.68 + params.shaderAmount * 0.32);
+  const blobTrailDensity = pow(params.blobTrailDensity, 1.1) * 1.25;
+  const blobTrailScatter = pow(params.blobTrailScatter, 1.08);
   shaderPg.shader(glitchShader);
   glitchShader.setUniform("uTex", sourcePg);
   glitchShader.setUniform("uResolution", [width, height]);
@@ -202,6 +206,8 @@ function renderShaderFrame(rectUniforms, rectModes, rectCount) {
   glitchShader.setUniform("uBlockMix", blockMix);
   glitchShader.setUniform("uScanMix", scanMix);
   glitchShader.setUniform("uNoiseMix", noiseMix);
+  glitchShader.setUniform("uBlobTrailDensity", blobTrailDensity);
+  glitchShader.setUniform("uBlobTrailScatter", blobTrailScatter);
   glitchShader.setUniform("uShowVideo", params.showVideo ? 1 : 0);
   glitchShader.setUniform("uRectCount", rectCount);
   glitchShader.setUniform("uRects", rectUniforms);
@@ -410,8 +416,7 @@ function drawBlobRects(selected) {
 
   for (let i = 0; i < selected.length; i++) {
     const point = selected[i];
-    const alpha = 255 * params.blobAlpha * (0.45 + point.strength * 0.55);
-    const c = params.tintEdges ? buildAsciiTint(alpha) : color(240, 245, 255, alpha);
+    const c = params.tintEdges ? buildAsciiTint(255) : color(240, 245, 255);
 
     stroke(c);
     strokeWeight(1 + point.strength * 1.3);
@@ -493,6 +498,8 @@ function setupUI() {
   blobFolder.addInput(params, "blobScale", { min: 0.4, max: 2, step: 0.05, label: "scale" });
   blobFolder.addInput(params, "blobSpacing", { min: 0.4, max: 2.4, step: 0.05, label: "spacing" });
   blobFolder.addInput(params, "blobMaxSize", { min: 0.6, max: 2.8, step: 0.05, label: "max size" });
+  blobFolder.addInput(params, "blobTrailDensity", { min: 0, max: 1.4, step: 0.01, label: "trail" });
+  blobFolder.addInput(params, "blobTrailScatter", { min: 0.4, max: 1.8, step: 0.01, label: "scatter" });
 
   setupHoverUI();
 }
