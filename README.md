@@ -12,8 +12,8 @@
 ### ASCII Edge Glitch
 
 - 目录：`projects/ascii_edge_glitch`
-- 当前首页入口：`projects/ascii_edge_glitch/ascii_edge_glitch_shader_0.6/index.html`
-- 这是一个基于视频边缘提取和 shader 视频处理的 ASCII glitch 实验。当前版本保留 p5.js 的字符与线框叠层，同时把视频本体的色偏、块状错位和扫描干扰交给 shader 完成，并把 Blob 轮廓拖尾改成更断裂、跳变的故障残影。
+- 当前首页入口：`projects/ascii_edge_glitch/ascii_edge_glitch_shader_0.5/index.html`
+- 这是一个基于视频边缘提取和 shader 视频处理的 ASCII glitch 实验。当前版本保留 p5.js 的字符与线框叠层，同时把视频本体的色偏、块状错位和扫描干扰交给 shader 完成。
 
 ### Contour Detection OpenCV.js
 

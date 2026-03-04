@@ -45,22 +45,24 @@ const params = {
   cellSize: 7,
   edgeThreshold: 106,
   blur: 1,
-  opacity: 0.86,
+  opacity: 1.0,
   jitterPx: 0.4,
-  charVariety: 0.76,
+  charVariety: 1.0,
   shaderAmount: 0.72,
   rgbShift: 0.7,
-  damageMix: 0.72,
-  rawMix: 0.34,
-  invertMix: 0.18,
-  blobPoints: 12,
-  blobAlpha: 0.72,
-  blobScale: 1.0,
-  blobSpacing: 1.1,
-  blobMaxSize: 1.8,
+  damageMix: 0.34,
+  rawMix: 0.5,
+  invertMix: 0.21,
+  blobPoints: 31,
+  showBlob: true,
+  blobAlpha: 1.0,
+  blobScale: 3.5,
+  blobSpacing: 0.4,
+  blobMaxSize: 2.5,
   showBlobOutlines: true,
   maxFps: 30,
   showVideo: true,
+  playAudio: true,
   showShaderBase: true,
   showAscii: true,
   tintEdges: false,
@@ -75,6 +77,12 @@ const ASCII_DIAG_A = "/7xYVvnr*+";
 const ASCII_DIAG_B = "\\\\LJtyk#%";
 const ASCII_SPARK = "+*#%&@$";
 const ASCII_GLITCH = "<>[]{}()\\/|_-+=*#%!?:;";
+const ASCII_POOLS = [
+  ASCII_HORIZONTAL + ASCII_GLITCH + ASCII_DENSE.slice(0, 18),
+  ASCII_DIAG_A + ASCII_GLITCH + ASCII_DENSE.slice(10, 28),
+  ASCII_VERTICAL + ASCII_GLITCH + ASCII_DENSE.slice(18, 40),
+  ASCII_DIAG_B + ASCII_GLITCH + ASCII_DENSE.slice(26, 48),
+];
 
 function preload() {
   glitchShader = loadShader("shader.vert", "shader.frag");
@@ -127,12 +135,16 @@ function draw() {
   refreshAnalysisIfNeeded(videoNode, procW, procH);
 
   const activeCells = runtime.activeCells;
-  const blobRects = runtime.blobRects;
+  const blobRects = params.showBlob ? runtime.blobRects : [];
   const cellW = runtime.cellW;
   const cellH = runtime.cellH;
 
   if (params.showShaderBase) {
-    renderShaderFrame(runtime.shaderUniforms, runtime.shaderModes, runtime.shaderRectCount);
+    renderShaderFrame(
+      runtime.shaderUniforms,
+      runtime.shaderModes,
+      params.showBlob ? runtime.shaderRectCount : 0
+    );
   }
 
   if (!params.showVideo) {
@@ -149,11 +161,19 @@ function draw() {
 
   if (params.showAscii) {
     push();
-    blendMode(ADD);
+    blendMode(shouldUseAdditiveAscii() ? ADD : BLEND);
     textSize(Math.max(6, Math.floor(Math.min(cellW, cellH) * 1.15)));
+    const asciiAlpha = Math.round(255 * params.opacity);
+    if (params.tintEdges) {
+      fill(buildAsciiTint(asciiAlpha));
+    } else {
+      fill(240, 245, 255, asciiAlpha);
+    }
 
     let lastRow = -1;
     let rowShift = 0;
+    const jitterAmount = params.jitterPx;
+    const frameBucket = frameCount;
     for (let i = 0; i < activeCells.length; i++) {
       const cell = activeCells[i];
       if (cell.y !== lastRow) {
@@ -161,17 +181,12 @@ function draw() {
         rowShift = computeRowShift(cell.y, cellW);
       }
 
-      const ch = pickAsciiChar(cell, cell.luma, cell.x, cell.y);
-      const cx = (cell.x + 0.5) * cellW + rowShift + random(-params.jitterPx, params.jitterPx);
-      const cy = (cell.y + 0.5) * cellH + random(-params.jitterPx, params.jitterPx);
-
-      if (params.tintEdges) {
-        fill(buildAsciiTint(Math.round(255 * params.opacity)));
-        text(ch, cx, cy);
-      } else {
-        fill(240, 245, 255, Math.round(255 * params.opacity));
-        text(ch, cx, cy);
-      }
+      const ch = pickAsciiChar(cell, cell.luma, cell.x, cell.y, frameBucket);
+      const jitterX = jitterAmount > 0 ? hashSigned(cell.x * 0.73 + frameBucket * 0.11, cell.y * 0.91 + 17.0) * jitterAmount : 0;
+      const jitterY = jitterAmount > 0 ? hashSigned(cell.x * 0.59 + 41.0, cell.y * 0.67 + frameBucket * 0.09) * jitterAmount : 0;
+      const cx = (cell.x + 0.5) * cellW + rowShift + jitterX;
+      const cy = (cell.y + 0.5) * cellH + jitterY;
+      text(ch, cx, cy);
     }
     pop();
   }
@@ -324,10 +339,10 @@ function selectBlobRects(points) {
     if (selected.length >= params.blobPoints) break;
     if (!isBlobFarEnough(point, selected, minDistSq)) continue;
 
-    const strengthCurve = pow(point.strength, 1.85);
-    const size = (22 + strengthCurve * (90 + params.blobMaxSize * 210)) * params.blobScale;
-    const widthRatio = 1.02 + strengthCurve * 0.88;
-    const heightRatio = 0.42 + strengthCurve * 0.82;
+    const strengthCurve = pow(point.strength, 2.6);
+    const size = (12 + strengthCurve * (70 + params.blobMaxSize * 280)) * params.blobScale;
+    const widthRatio = 0.9 + strengthCurve * 1.2;
+    const heightRatio = 0.28 + strengthCurve * 1.08;
     selected.push({
       x: point.x,
       y: point.y,
@@ -427,6 +442,7 @@ function setupUI() {
   ui.hud.innerHTML = `
     <h1>ASCII Edge Glitch Shader</h1>
     <p>拖拽本地 mp4，用 p5.js 编排 ASCII / 线框层，并让 shader 负责视频本体的 glitch 与色偏处理。</p>
+    <p class="hint">快捷键：V 视频 / A ASCII / B Blob</p>
     <div class="badge"><span class="dot"></span><span class="txt">未加载视频</span></div>
   `;
   document.body.appendChild(ui.hud);
@@ -464,6 +480,9 @@ function setupUI() {
     interval: 150,
   });
   sourceFolder.addInput(params, "showVideo", { label: "video" });
+  sourceFolder.addInput(params, "playAudio", { label: "audio" }).on("change", () => {
+    applyVideoAudioState();
+  });
   sourceFolder.addInput(params, "showAscii", { label: "ascii" });
   sourceFolder.addInput(params, "maxFps", { min: 10, max: 60, step: 1, label: "fps cap" });
 
@@ -487,12 +506,13 @@ function setupUI() {
     tintColorInput.hidden = !event.value;
   });
 
+  blobFolder.addInput(params, "showBlob", { label: "show" });
   blobFolder.addInput(params, "showBlobOutlines", { label: "outline" });
   blobFolder.addInput(params, "blobPoints", { min: 0, max: 40, step: 1, label: "count" });
   blobFolder.addInput(params, "blobAlpha", { min: 0, max: 1, step: 0.01, label: "alpha" });
-  blobFolder.addInput(params, "blobScale", { min: 0.4, max: 2, step: 0.05, label: "scale" });
+  blobFolder.addInput(params, "blobScale", { min: 0.6, max: 3.5, step: 0.05, label: "scale" });
   blobFolder.addInput(params, "blobSpacing", { min: 0.4, max: 2.4, step: 0.05, label: "spacing" });
-  blobFolder.addInput(params, "blobMaxSize", { min: 0.6, max: 2.8, step: 0.05, label: "max size" });
+  blobFolder.addInput(params, "blobMaxSize", { min: 0.8, max: 4.5, step: 0.05, label: "max size" });
 
   setupHoverUI();
 }
@@ -597,15 +617,23 @@ function loadVideoFile(file) {
     setStatus(false, "视频加载失败");
   });
 
-  nextVideo.volume(0);
+  nextVideo.volume(params.playAudio ? 1 : 0);
   nextVideo.loop();
   nextVideo.hide();
-  nextVideo.elt.muted = true;
+  nextVideo.elt.muted = !params.playAudio;
   nextVideo.elt.playsInline = true;
   nextVideo.elt.autoplay = true;
   nextVideo.elt.crossOrigin = "anonymous";
 
   videoSource = nextVideo;
+  applyVideoAudioState();
+}
+
+function applyVideoAudioState() {
+  if (!videoSource || !videoSource.elt) return;
+  const shouldPlayAudio = !!params.playAudio;
+  videoSource.volume(shouldPlayAudio ? 1 : 0);
+  videoSource.elt.muted = !shouldPlayAudio;
 }
 
 function setStatus(ok, text) {
@@ -640,25 +668,20 @@ function sobelData(luma, w, x, y) {
   };
 }
 
-function pickAsciiChar(edge, lumaValue, x, y) {
+function pickAsciiChar(edge, lumaValue, x, y, timeSeed) {
   const edgeStrength = constrain((edge.mag - params.edgeThreshold) / Math.max(1, 255 - params.edgeThreshold), 0, 1);
   const brightness = constrain(lumaValue / 255, 0, 1);
   const angle = Math.atan2(edge.gy, edge.gx);
   const angleNorm = (angle + Math.PI) / TWO_PI;
   const orientationBucket = Math.floor(angleNorm * 4) % 4;
 
-  let pool = ASCII_DENSE;
-  if (orientationBucket === 0) pool = ASCII_HORIZONTAL + ASCII_GLITCH + ASCII_DENSE.slice(0, 18);
-  if (orientationBucket === 1) pool = ASCII_DIAG_A + ASCII_GLITCH + ASCII_DENSE.slice(10, 28);
-  if (orientationBucket === 2) pool = ASCII_VERTICAL + ASCII_GLITCH + ASCII_DENSE.slice(18, 40);
-  if (orientationBucket === 3) pool = ASCII_DIAG_B + ASCII_GLITCH + ASCII_DENSE.slice(26, 48);
-
+  const pool = ASCII_POOLS[orientationBucket];
   const denseIndex = Math.floor((1 - edgeStrength) * (ASCII_DENSE.length - 1));
   const baseChar = ASCII_DENSE[constrain(denseIndex, 0, ASCII_DENSE.length - 1)];
   const poolIndex = Math.floor(constrain((1 - brightness * 0.6 - edgeStrength * 0.4), 0, 1) * (pool.length - 1));
   const directionalChar = pool[constrain(poolIndex, 0, pool.length - 1)];
-  const drift = noise(x * 0.085, y * 0.085, frameCount * 0.025);
-  const sparkle = noise(x * 0.16 + 50, y * 0.16 + 10, frameCount * 0.04);
+  const drift = hash01(x * 0.085 + timeSeed * 0.025, y * 0.085 + 13.0);
+  const sparkle = hash01(x * 0.16 + timeSeed * 0.04 + 50.0, y * 0.16 + 10.0);
 
   if (sparkle > 0.82 && edgeStrength > 0.45) {
     return ASCII_SPARK[Math.floor(sparkle * ASCII_SPARK.length) % ASCII_SPARK.length];
@@ -685,6 +708,22 @@ function buildAsciiTint(alpha) {
   const c = color(params.asciiTintColor);
   c.setAlpha(constrain(alpha, 0, 255));
   return c;
+}
+
+function shouldUseAdditiveAscii() {
+  if (!params.tintEdges) return true;
+  const c = color(params.asciiTintColor);
+  const brightness = 0.2126 * red(c) + 0.7152 * green(c) + 0.0722 * blue(c);
+  return brightness >= 72;
+}
+
+function hash01(x, y) {
+  const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+  return s - Math.floor(s);
+}
+
+function hashSigned(x, y) {
+  return hash01(x, y) * 2 - 1;
 }
 
 function drawIdle(overrideText) {
@@ -749,5 +788,25 @@ function windowResized() {
 function mousePressed() {
   if (videoSource && videoReady) {
     videoSource.elt.play().catch(() => {});
+  }
+}
+
+function keyPressed() {
+  const k = String(key || "").toLowerCase();
+  if (k === "v") {
+    params.showVideo = !params.showVideo;
+    refreshPaneUI();
+  } else if (k === "a") {
+    params.showAscii = !params.showAscii;
+    refreshPaneUI();
+  } else if (k === "b") {
+    params.showBlob = !params.showBlob;
+    refreshPaneUI();
+  }
+}
+
+function refreshPaneUI() {
+  if (ui.panel && typeof ui.panel.refresh === "function") {
+    ui.panel.refresh();
   }
 }
